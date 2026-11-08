@@ -56,8 +56,8 @@ jobs:
         
         echo "VersionName detectado: $VERSION_NAME"
 
-        # Crear carpeta de distribución
-        TIMESTAMP=$(date +'%Y%m%d_%H%M%S')
+        # Crear carpeta de distribución usando la zona horaria de Madrid
+        TIMESTAMP=$(TZ='Europe/Madrid' date +'%Y%m%d_%H%M%S')
         mkdir -p dist-apk
         
         BUILD_TYPE_LOWER=$(echo "${{ github.event.inputs.build_type || 'debug' }}" | tr '[:upper:]' '[:lower:]')
