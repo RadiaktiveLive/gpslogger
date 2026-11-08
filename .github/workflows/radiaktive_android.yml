@@ -41,30 +41,38 @@ jobs:
 
     - name: Extraer versionName y renombrar APK
       run: |
-        # Detectar si usa build.gradle o build.gradle.kts en el módulo app
-        GRADLE_FILE="app/build.gradle"
-        if [ ! -f "$GRADLE_FILE" ]; then
-          GRADLE_FILE="app/build.gradle.kts"
-        fi
-
-        # Extraer el valor de versionName (ej: "1.0.2" o 1.0.2)
-        VERSION_NAME=$(grep -m 1 "versionName" "$GRADLE_FILE" | sed 's/.*versionName[[:space:]]*=[[:space:]]*//;s/.*versionName[[:space:]]*//' | tr -d '"' | tr -d "'" | tr -d ' ')
+        # Buscar automáticamente cualquier archivo build.gradle o build.gradle.kts en el proyecto
+        GRADLE_FILE=$(find . -name "build.gradle" -o -name "build.gradle.kts" | grep -m 1 "app" || find . -name "build.gradle" -o -name "build.gradle.kts" | head -n 1)
         
-        # Si por alguna razón no lo encuentra, asignar un valor por defecto
+        VERSION_NAME="unknown"
+        if [ -n "$GRADLE_FILE" ] && [ -f "$GRADLE_FILE" ]; then
+          echo "Archivo Gradle encontrado en: $GRADLE_FILE"
+          VERSION_NAME=$(grep -m 1 "versionName" "$GRADLE_FILE" | sed 's/.*versionName[[:space:]]*=[[:space:]]*//;s/.*versionName[[:space:]]*//' | tr -d '"' | tr -d "'" | tr -d ' ')
+        fi
+        
         if [ -z "$VERSION_NAME" ]; then
           VERSION_NAME="unknown"
         fi
-
+        
         echo "VersionName detectado: $VERSION_NAME"
 
-        # Crear carpeta de distribución y copiar con nombre personalizado
+        # Crear carpeta de distribución
         TIMESTAMP=$(date +'%Y%m%d_%H%M%S')
         mkdir -p dist-apk
         
-        # Seleccionar la ruta del APK según sea debug o release
         BUILD_TYPE_LOWER=$(echo "${{ github.event.inputs.build_type || 'debug' }}" | tr '[:upper:]' '[:lower:]')
-        cp app/build/outputs/apk/$BUILD_TYPE_LOWER/app-$BUILD_TYPE_LOWER.apk dist-apk/app-$BUILD_TYPE_LOWER-v$VERSION_NAME-$TIMESTAMP.apk
-
+        
+        # Buscar el APK generado de forma dinámica en cualquier subcarpeta de outputs
+        APK_FILE=$(find . -path "*/build/outputs/apk/$BUILD_TYPE_LOWER/*.apk" | head -n 1)
+        
+        if [ -f "$APK_FILE" ]; then
+          echo "APK encontrado en: $APK_FILE"
+          cp "$APK_FILE" dist-apk/app-$BUILD_TYPE_LOWER-v$VERSION_NAME-$TIMESTAMP.apk
+          echo "APK copiado y renombrado con éxito."
+        else
+          echo "Error crítico: No se ha podido localizar el archivo APK compilado en las rutas de salida."
+          exit 1
+        fi
     - name: Subir APK como artefacto
       uses: actions/upload-artifact@v4
       with:
