@@ -53,6 +53,7 @@ import com.mendhak.gpslogger.loggers.FileLoggerFactory;
 import com.mendhak.gpslogger.loggers.Files;
 import com.mendhak.gpslogger.loggers.nmea.NmeaFileLogger;
 import com.mendhak.gpslogger.senders.AlarmReceiver;
+import com.mendhak.gpslogger.senders.dawarich.DawarichManager;
 import com.mendhak.gpslogger.senders.FileSenderFactory;
 import de.greenrobot.event.EventBus;
 import org.slf4j.Logger;
@@ -588,6 +589,10 @@ public class GpsLoggingService extends Service  {
         stopAbsoluteTimer();
         // Email log file before setting location info to null
         autoSendLogFileOnStop();
+        if (preferenceHelper.shouldLogToDawarich()) {
+            // Send what's left in the queue, even if it's below the batch minimum
+            new DawarichManager(preferenceHelper).uploadQueue();
+        }
         cancelAlarm();
         session.setCurrentLocationInfo(null);
         session.setSinglePointMode(false);
@@ -747,7 +752,9 @@ public class GpsLoggingService extends Service  {
             fusedLocationlistener = new GeneralLocationListener(this, "FUSED");
         }
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+        // Only one callback: stopGpsManager unregisters just this one, and this method runs again for every point
+        // while the GPS is kept on between fixes, so a new callback each time would leave all earlier ones registered.
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N && gnssStatusCallback == null) {
             gnssStatusCallback = new GnssStatus.Callback() {
                 @Override
                 public void onStarted() {
